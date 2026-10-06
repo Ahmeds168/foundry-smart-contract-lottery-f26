@@ -22,7 +22,7 @@ The contract follows the Chainlink Automation interface (`checkUpkeep` / `perfor
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/foundry-smart-contract-lottery-f26.git
+git clone https://github.com/Ahmeds168/foundry-smart-contract-lottery-f26.git
 cd foundry-smart-contract-lottery-f26
 make install
 make build
