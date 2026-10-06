@@ -1,66 +1,110 @@
-## Foundry
+# Foundry Smart Contract Lottery
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+A provably fair lottery written in Solidity and built with Foundry. Players pay an entrance fee to join a round, and after a set interval the contract asks Chainlink VRF for a random number and pays the whole prize pool to one winner. Nobody, including the deployer, can predict or influence who wins.
 
-Foundry consists of:
+Deployed on Sepolia: [`0xdAEdf1079F23C1D4DBf25c94BC924764c6d8b84A`](https://sepolia.etherscan.io/address/0xdAEdf1079F23C1D4DBf25c94BC924764c6d8b84A)
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## How it works
 
-## Documentation
+1. A player calls `enterRaffle()` and sends at least the entrance fee.
+2. Once the interval has passed and the raffle has players and a balance, `checkUpkeep()` returns `true`.
+3. Anyone calls `performUpkeep()`. The raffle closes to new entries and requests a random number from Chainlink VRF v2.5.
+4. The VRF coordinator calls back with the random number. The contract picks a winner, sends them the full balance, and reopens for the next round.
 
-https://book.getfoundry.sh/
+The contract follows the Chainlink Automation interface (`checkUpkeep` / `performUpkeep`). Chainlink has since retired the Automation service, so on Sepolia `performUpkeep` is triggered by hand with `cast`, as shown below. It can be driven by a Chainlink CRE workflow or any other scheduler without changing the contract.
 
-## Usage
+## Requirements
 
-### Build
+- [Git](https://git-scm.com/)
+- [Foundry](https://getfoundry.sh/) (`forge`, `cast`, `anvil`)
+- `make`
 
-```shell
-$ forge build
+## Setup
+
+```bash
+git clone https://github.com/YOUR_USERNAME/foundry-smart-contract-lottery-f26.git
+cd foundry-smart-contract-lottery-f26
+make install
+make build
 ```
 
-### Test
+## Testing
 
-```shell
-$ forge test
+```bash
+make test
 ```
 
-### Format
+Run a single test, with traces:
 
-```shell
-$ forge fmt
+```bash
+forge test --mt testRaffleRevertsWhenYouDontPayEnough -vvvv
 ```
 
-### Gas Snapshots
+Check coverage:
 
-```shell
-$ forge snapshot
+```bash
+forge coverage
 ```
 
-### Anvil
+## Deploying to Sepolia
 
-```shell
-$ anvil
+Create a `.env` file in the project root. It is git-ignored and must never be committed.
+
+```bash
+SEPOLIA_RPC_URL=your_rpc_url
+ETHERSCAN_API_KEY=your_etherscan_api_key
 ```
 
-### Deploy
+Import your deployer key into Foundry's encrypted keystore, so the private key never sits in a file:
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+```bash
+cast wallet import default --interactive
 ```
 
-### Cast
+Then deploy and verify:
 
-```shell
-$ cast <subcommand>
+```bash
+make deploy-sepolia
 ```
 
-### Help
+The raffle needs a funded Chainlink VRF subscription with the deployed contract added as a consumer. Subscriptions are managed at [vrf.chain.link](https://vrf.chain.link), and test LINK is available from [faucets.chain.link](https://faucets.chain.link).
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+## Interacting with the contract
+
+Set the address and load your environment first:
+
+```bash
+source .env
+RAFFLE=0xdAEdf1079F23C1D4DBf25c94BC924764c6d8b84A
 ```
+
+Read the entrance fee (in wei) and enter with that amount:
+
+```bash
+cast call $RAFFLE "getEntranceFee()(uint256)" --rpc-url $SEPOLIA_RPC_URL
+cast send $RAFFLE "enterRaffle()" --value <FEE_IN_WEI> --rpc-url $SEPOLIA_RPC_URL --account default
+```
+
+Check whether a round is ready to be drawn, then draw it:
+
+```bash
+cast call $RAFFLE "checkUpkeep(bytes)(bool,bytes)" 0x --rpc-url $SEPOLIA_RPC_URL
+cast send $RAFFLE "performUpkeep(bytes)" 0x --rpc-url $SEPOLIA_RPC_URL --account default
+```
+
+See the result. State `0` means open and `1` means a winner is being calculated.
+
+```bash
+cast call $RAFFLE "getRaffleState()(uint8)" --rpc-url $SEPOLIA_RPC_URL
+cast call $RAFFLE "getRecentWinner()(address)" --rpc-url $SEPOLIA_RPC_URL
+```
+
+## Built with
+
+- [Foundry](https://getfoundry.sh/) for building, testing, and deployment
+- [Chainlink VRF v2.5](https://docs.chain.link/vrf) for verifiable randomness
+- [Solmate](https://github.com/transmissions11/solmate) and [foundry-devops](https://github.com/Cyfrin/foundry-devops) as supporting libraries
+
+## Acknowledgements
+
+Built while following the [Cyfrin Updraft](https://updraft.cyfrin.io/) Foundry course.
